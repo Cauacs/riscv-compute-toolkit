@@ -1,0 +1,14 @@
+# CMake build trees
+/build/
+/cmake-build-*/
+
+# Python caches and packaging artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+
+# Generated benchmark runs
+/results/*
+!/results/.gitkeep
