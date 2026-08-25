@@ -5,3 +5,87 @@ project(riscv_compute_toolkit VERSION 0.1.0 LANGUAGES C)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
+
+include(CTest)
+
+set(RCT_REFERENCE_SOURCE src/kernels/vector_add_reference.c)
+set(RCT_SCALAR_SOURCE src/kernels/vector_add_scalar.c)
+set(RCT_AUTO_SOURCE src/kernels/vector_add_auto.c)
+
+add_library(
+    rct_core
+    STATIC
+    ${RCT_REFERENCE_SOURCE}
+    ${RCT_SCALAR_SOURCE}
+    ${RCT_AUTO_SOURCE}
+    src/benchmark/input.c
+    src/benchmark/validation.c
+)
+target_include_directories(
+    rct_core
+    PUBLIC include
+    PRIVATE src/benchmark
+)
+
+if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
+    set_property(
+        SOURCE ${RCT_REFERENCE_SOURCE}
+        APPEND PROPERTY COMPILE_OPTIONS -O1 -fno-tree-vectorize
+    )
+    set_property(
+        SOURCE ${RCT_SCALAR_SOURCE}
+        APPEND PROPERTY COMPILE_OPTIONS -O3 -fno-tree-vectorize
+    )
+    set_property(
+        SOURCE ${RCT_AUTO_SOURCE}
+        APPEND PROPERTY COMPILE_OPTIONS -O3 -ftree-vectorize
+    )
+elseif(CMAKE_C_COMPILER_ID MATCHES "Clang")
+    set_property(
+        SOURCE ${RCT_REFERENCE_SOURCE}
+        APPEND PROPERTY COMPILE_OPTIONS -O1 -fno-vectorize -fno-slp-vectorize
+    )
+    set_property(
+        SOURCE ${RCT_SCALAR_SOURCE}
+        APPEND PROPERTY COMPILE_OPTIONS -O3 -fno-vectorize -fno-slp-vectorize
+    )
+    set_property(
+        SOURCE ${RCT_AUTO_SOURCE}
+        APPEND PROPERTY COMPILE_OPTIONS -O3
+    )
+else()
+    message(
+        WARNING
+        "Compiler ${CMAKE_C_COMPILER_ID} is unsupported for explicit "
+        "scalar/auto-vectorization separation"
+    )
+endif()
+
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(rct_core PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+if(NOT WIN32)
+    target_link_libraries(rct_core PRIVATE m)
+endif()
+
+if(BUILD_TESTING)
+    add_executable(
+        rct_portable_tests
+        tests/c/test_portable_vector_add.c
+    )
+    target_include_directories(
+        rct_portable_tests
+        PRIVATE src/benchmark
+    )
+    target_link_libraries(rct_portable_tests PRIVATE rct_core)
+
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(
+            rct_portable_tests
+            PRIVATE -Wall -Wextra -Wpedantic
+        )
+    endif()
+
+    add_test(NAME portable_vector_add COMMAND rct_portable_tests)
+endif()
