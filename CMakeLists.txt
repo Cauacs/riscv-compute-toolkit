@@ -12,6 +12,24 @@ set(RCT_REFERENCE_SOURCE src/kernels/vector_add_reference.c)
 set(RCT_SCALAR_SOURCE src/kernels/vector_add_scalar.c)
 set(RCT_AUTO_SOURCE src/kernels/vector_add_auto.c)
 
+option(
+    RCT_SOURCE_DEBUG
+    "Build source-friendly binaries instead of applying experiment optimizations"
+    OFF
+)
+
+if(RCT_SOURCE_DEBUG)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        add_compile_options(-Og -g3 -fno-omit-frame-pointer)
+    else()
+        message(
+            WARNING
+            "RCT_SOURCE_DEBUG has no compiler-specific flags for "
+            "${CMAKE_C_COMPILER_ID}"
+        )
+    endif()
+endif()
+
 add_library(
     rct_core
     STATIC
@@ -28,38 +46,40 @@ target_include_directories(
     PRIVATE src/benchmark
 )
 
-if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
-    set_property(
-        SOURCE ${RCT_REFERENCE_SOURCE}
-        APPEND PROPERTY COMPILE_OPTIONS -O1 -fno-tree-vectorize
-    )
-    set_property(
-        SOURCE ${RCT_SCALAR_SOURCE}
-        APPEND PROPERTY COMPILE_OPTIONS -O3 -fno-tree-vectorize
-    )
-    set_property(
-        SOURCE ${RCT_AUTO_SOURCE}
-        APPEND PROPERTY COMPILE_OPTIONS -O3 -ftree-vectorize
-    )
-elseif(CMAKE_C_COMPILER_ID MATCHES "Clang")
-    set_property(
-        SOURCE ${RCT_REFERENCE_SOURCE}
-        APPEND PROPERTY COMPILE_OPTIONS -O1 -fno-vectorize -fno-slp-vectorize
-    )
-    set_property(
-        SOURCE ${RCT_SCALAR_SOURCE}
-        APPEND PROPERTY COMPILE_OPTIONS -O3 -fno-vectorize -fno-slp-vectorize
-    )
-    set_property(
-        SOURCE ${RCT_AUTO_SOURCE}
-        APPEND PROPERTY COMPILE_OPTIONS -O3
-    )
-else()
-    message(
-        WARNING
-        "Compiler ${CMAKE_C_COMPILER_ID} is unsupported for explicit "
-        "scalar/auto-vectorization separation"
-    )
+if(NOT RCT_SOURCE_DEBUG)
+    if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
+        set_property(
+            SOURCE ${RCT_REFERENCE_SOURCE}
+            APPEND PROPERTY COMPILE_OPTIONS -O1 -fno-tree-vectorize
+        )
+        set_property(
+            SOURCE ${RCT_SCALAR_SOURCE}
+            APPEND PROPERTY COMPILE_OPTIONS -O3 -fno-tree-vectorize
+        )
+        set_property(
+            SOURCE ${RCT_AUTO_SOURCE}
+            APPEND PROPERTY COMPILE_OPTIONS -O3 -ftree-vectorize
+        )
+    elseif(CMAKE_C_COMPILER_ID MATCHES "Clang")
+        set_property(
+            SOURCE ${RCT_REFERENCE_SOURCE}
+            APPEND PROPERTY COMPILE_OPTIONS -O1 -fno-vectorize -fno-slp-vectorize
+        )
+        set_property(
+            SOURCE ${RCT_SCALAR_SOURCE}
+            APPEND PROPERTY COMPILE_OPTIONS -O3 -fno-vectorize -fno-slp-vectorize
+        )
+        set_property(
+            SOURCE ${RCT_AUTO_SOURCE}
+            APPEND PROPERTY COMPILE_OPTIONS -O3
+        )
+    else()
+        message(
+            WARNING
+            "Compiler ${CMAKE_C_COMPILER_ID} is unsupported for explicit "
+            "scalar/auto-vectorization separation"
+        )
+    endif()
 endif()
 
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")

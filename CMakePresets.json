@@ -1,0 +1,44 @@
+{
+  "version": 2,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 20,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "source-debug",
+      "generator": "Unix Makefiles",
+      "displayName": "Source Debug",
+      "description": "Source-friendly debugging without experiment optimizations.",
+      "binaryDir": "${sourceDir}/build/source-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "RCT_SOURCE_DEBUG": "ON"
+      }
+    },
+    {
+      "name": "optimized-debug",
+      "displayName": "Optimized Debug",
+      "generator": "Unix Makefiles",
+      "description": "Experiment optimizations with debug symbols for codegen inspection.",
+      "binaryDir": "${sourceDir}/build/optimized-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "RCT_SOURCE_DEBUG": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "source-debug",
+      "configurePreset": "source-debug"
+    },
+    {
+      "name": "optimized-debug",
+      "configurePreset": "optimized-debug"
+    }
+  ]
+}

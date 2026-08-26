@@ -7,6 +7,19 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .venv/
+
+# Local caches, logs, and editor artifacts
+/.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.log
+*.swp
+*~
+.DS_Store
+Thumbs.db
 dist/
 
 # Generated benchmark runs
