@@ -13,9 +13,13 @@ Phase 1 focuses exclusively on deterministic `float32` vector addition. It will 
 ## Bootstrap commands
 
 ```text
-cmake -S . -B build
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
+ctest --test-dir build --output-on-failure
+./build/rct_vector_add_bench
 python -m rct --help
 ```
 
-The benchmark implementation is intentionally deferred to later Phase 1 steps.
+The portable vector-add benchmark measures reference, scalar, and compiler
+auto-vectorized kernels with deterministic inputs and correctness validation.
+RVV execution, run artifacts, and reports remain later Phase 1 steps.

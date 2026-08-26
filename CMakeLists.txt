@@ -20,6 +20,7 @@ add_library(
     ${RCT_AUTO_SOURCE}
     src/benchmark/input.c
     src/benchmark/validation.c
+    src/benchmark/vector_add_benchmark.c
 )
 target_include_directories(
     rct_core
@@ -67,6 +68,24 @@ endif()
 
 if(NOT WIN32)
     target_link_libraries(rct_core PRIVATE m)
+endif()
+
+add_executable(
+    rct_vector_add_bench
+    src/benchmark/vector_add_bench.c
+)
+target_include_directories(
+    rct_vector_add_bench
+    PRIVATE src/benchmark
+)
+target_link_libraries(rct_vector_add_bench PRIVATE rct_core)
+target_compile_definitions(rct_core PRIVATE _POSIX_C_SOURCE=200809L)
+
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(
+        rct_vector_add_bench
+        PRIVATE -Wall -Wextra -Wpedantic
+    )
 endif()
 
 if(BUILD_TESTING)

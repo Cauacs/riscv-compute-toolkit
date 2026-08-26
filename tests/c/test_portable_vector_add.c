@@ -1,4 +1,5 @@
 #include "input.h"
+#include "vector_add_benchmark.h"
 #include "rct/kernels.h"
 #include "rct/validation.h"
 
@@ -31,6 +32,20 @@ static const rct_vector_add_f32_fn PORTABLE_KERNELS[] = {
     rct_vector_add_f32_scalar,
     rct_vector_add_f32_auto,
 };
+
+static void rct_invalid_vector_add(
+    const float *lhs,
+    const float *rhs,
+    float *output,
+    size_t length
+) {
+    (void)lhs;
+    (void)rhs;
+
+    for (size_t index = 0; index < length; ++index) {
+        output[index] = NAN;
+    }
+}
 
 static bool test_zero_length(void) {
     for (size_t index = 0; index < RCT_ARRAY_LENGTH(PORTABLE_KERNELS); ++index) {
@@ -158,6 +173,61 @@ static bool test_medium_length(void) {
     return kernels_match_at_length(4099U);
 }
 
+static bool test_benchmark_summary(void) {
+    const uint64_t original_samples[] = {9U, 1U, 7U, 3U};
+    uint64_t samples[RCT_ARRAY_LENGTH(original_samples)];
+    rct_vector_add_f32_benchmark_summary summary;
+
+    memcpy(samples, original_samples, sizeof(samples));
+    RCT_CHECK(rct_vector_add_f32_benchmark_summarize_samples(
+        samples,
+        RCT_ARRAY_LENGTH(samples),
+        &summary
+    ));
+    RCT_CHECK(memcmp(samples, original_samples, sizeof(samples)) == 0);
+    RCT_CHECK(summary.minimum_ns == 1U);
+    RCT_CHECK(summary.median_ns == 5.0);
+    RCT_CHECK(summary.mean_ns == 5.0);
+    RCT_CHECK(!rct_vector_add_f32_benchmark_summarize_samples(
+        NULL,
+        0U,
+        &summary
+    ));
+
+    return true;
+}
+
+static bool test_benchmark_rejects_invalid_kernel(void) {
+    const rct_vector_add_f32_benchmark_config config = {
+        .length = 8U,
+        .warmup_iterations = 0U,
+        .measured_iterations = 1U,
+        .seed = UINT64_C(1),
+    };
+    const rct_vector_add_f32_benchmark_implementation implementations[] = {
+        {"reference", rct_vector_add_f32_reference},
+        {"invalid", rct_invalid_vector_add},
+    };
+    rct_vector_add_f32_benchmark_result results[
+        RCT_ARRAY_LENGTH(implementations)
+    ] = {{0}};
+    const char *failed_implementation = NULL;
+
+    RCT_CHECK(rct_run_vector_add_f32_benchmark(
+        &config,
+        implementations,
+        RCT_ARRAY_LENGTH(implementations),
+        results,
+        &failed_implementation
+    ) == RCT_VECTOR_ADD_BENCHMARK_VALIDATION_FAILURE);
+    RCT_CHECK(failed_implementation != NULL);
+    RCT_CHECK(strcmp(failed_implementation, "invalid") == 0);
+    RCT_CHECK(results[0].samples_ns == NULL);
+    RCT_CHECK(results[1].samples_ns == NULL);
+
+    return true;
+}
+
 static bool test_validation_policy(void) {
     const float expected[] = {1.0f, 2.0f, 3.0f};
     const float close[] = {1.0f, 2.0000005f, 3.0f};
@@ -187,6 +257,8 @@ int main(void) {
     passed = test_unaligned_lengths() && passed;
     passed = test_medium_length() && passed;
     passed = test_validation_policy() && passed;
+    passed = test_benchmark_summary() && passed;
+    passed = test_benchmark_rejects_invalid_kernel() && passed;
 
     if (!passed) {
         return EXIT_FAILURE;
