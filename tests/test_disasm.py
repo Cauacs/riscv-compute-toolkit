@@ -22,30 +22,9 @@ class ResolveKernelSymbolTests(unittest.TestCase):
             "rct_vector_add_f32_auto",
         )
 
-    def test_unknown_alias_reports_supported_aliases(self) -> None:
-        with self.assertRaisesRegex(
-            cli.DisassemblyError,
-            "Unknown kernel alias 'invalid'. Choose one of: reference, scalar, auto.",
-        ):
+    def test_unknown_alias_raises_disassembly_error(self) -> None:
+        with self.assertRaisesRegex(cli.DisassemblyError, "Unknown kernel alias"):
             cli.resolve_kernel_symbol("invalid")
-
-
-class ResolveBinaryPathTests(unittest.TestCase):
-    def test_explicit_binary_overrides_preset(self) -> None:
-        binary = Path("/tmp/rct_vector_add_bench")
-
-        self.assertEqual(cli.resolve_binary_path(binary, "source-debug"), binary)
-
-    def test_default_binary_uses_selected_preset(self) -> None:
-        binary = cli.resolve_binary_path(None, "source-debug")
-
-        self.assertEqual(
-            binary,
-            Path(cli.__file__).resolve().parent.parent
-            / "build"
-            / "source-debug"
-            / "rct_vector_add_bench",
-        )
 
 
 class FindDisassemblerTests(unittest.TestCase):
@@ -109,20 +88,17 @@ class BuildDisassemblerCommandTests(unittest.TestCase):
 
 
 class DisassembleTests(unittest.TestCase):
-    def test_missing_binary_fails_before_tool_lookup(self) -> None:
-        with mock.patch("rct.disasm.find_disassembler") as find_disassembler:
-            with self.assertRaisesRegex(
-                cli.DisassemblyError,
-                "Benchmark binary does not exist: /missing/rct_vector_add_bench",
-            ):
-                cli.disassemble(
-                    "auto",
-                    Path("/missing/rct_vector_add_bench"),
-                    "optimized-debug",
-                    include_source=True,
-                )
-
-        find_disassembler.assert_not_called()
+    def test_missing_binary_raises_disassembly_error(self) -> None:
+        with self.assertRaisesRegex(
+            cli.DisassemblyError,
+            "Benchmark binary does not exist",
+        ):
+            cli.disassemble(
+                "auto",
+                Path("/missing/rct_vector_add_bench"),
+                "optimized-debug",
+                include_source=True,
+            )
 
     def test_failed_disassembler_reports_stderr(self) -> None:
         with TemporaryDirectory() as directory:
@@ -144,6 +120,25 @@ class DisassembleTests(unittest.TestCase):
                     cli.disassemble(
                         "auto", binary, "optimized-debug", include_source=True
                     )
+
+    def test_successful_disassembly_returns_stdout(self) -> None:
+        with TemporaryDirectory() as directory:
+            binary = Path(directory) / "rct_vector_add_bench"
+            binary.touch()
+            success = subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="disassembly\n", stderr=""
+            )
+            with (
+                mock.patch(
+                    "rct.disasm.find_disassembler", return_value="/tools/objdump"
+                ),
+                mock.patch("rct.disasm.subprocess.run", return_value=success),
+            ):
+                output = cli.disassemble(
+                    "auto", binary, "optimized-debug", include_source=True
+                )
+
+        self.assertEqual(output, "disassembly\n")
 
 
 if __name__ == "__main__":

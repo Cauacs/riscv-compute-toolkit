@@ -182,9 +182,17 @@ step like source debug: optimized code may reorder instructions, inline calls,
 or remove locals. On RISC-V hardware, this is the workflow that will later
 show whether vector instructions were emitted.
 
-For a noninteractive code view, `objdump -dS build/optimized-debug/rct_vector_add_bench`
-is also useful. Compiler optimization/vectorization reports, `readelf`, and
-`perf` are possible future investigation tools, not RCT dependencies.
+For a noninteractive code view, use the focused CLI:
+
+```text
+rct disasm scalar
+rct disasm auto
+```
+
+`rct disasm` defaults to the `optimized-debug` build and interleaves source
+with assembly; add `--no-source` for assembly only. It prefers `llvm-objdump`
+and falls back to GNU `objdump`. Raw full-binary disassembly remains available
+with `objdump -dS build/optimized-debug/rct_vector_add_bench`.
 
 ## RCT GDB commands
 

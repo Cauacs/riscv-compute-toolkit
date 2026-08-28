@@ -16,6 +16,7 @@ Initially it focuses exclusively on deterministic `float32` vector addition. It 
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ctest --test-dir build --output-on-failure
+python -m unittest discover
 ./build/rct_vector_add_bench
 python -m rct --help
 ```
