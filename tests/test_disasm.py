@@ -4,27 +4,27 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest import mock
 
-from rct import disasm as cli
+from rct import disasm
 
 
 class ResolveKernelSymbolTests(unittest.TestCase):
     def test_known_aliases_resolve_to_kernel_symbols(self) -> None:
         self.assertEqual(
-            cli.resolve_kernel_symbol("reference"),
+            disasm.resolve_kernel_symbol("reference"),
             "rct_vector_add_f32_reference",
         )
         self.assertEqual(
-            cli.resolve_kernel_symbol("scalar"),
+            disasm.resolve_kernel_symbol("scalar"),
             "rct_vector_add_f32_scalar",
         )
         self.assertEqual(
-            cli.resolve_kernel_symbol("auto"),
+            disasm.resolve_kernel_symbol("auto"),
             "rct_vector_add_f32_auto",
         )
 
     def test_unknown_alias_raises_disassembly_error(self) -> None:
-        with self.assertRaisesRegex(cli.DisassemblyError, "Unknown kernel alias"):
-            cli.resolve_kernel_symbol("invalid")
+        with self.assertRaisesRegex(disasm.DisassemblyError, "Unknown kernel alias"):
+            disasm.resolve_kernel_symbol("invalid")
 
 
 class FindDisassemblerTests(unittest.TestCase):
@@ -36,28 +36,28 @@ class FindDisassemblerTests(unittest.TestCase):
                 "objdump": "/tools/objdump",
             }.get(name),
         ):
-            self.assertEqual(cli.find_disassembler(), "/tools/llvm-objdump")
+            self.assertEqual(disasm.find_disassembler(), "/tools/llvm-objdump")
 
     def test_falls_back_to_gnu_objdump(self) -> None:
         with mock.patch(
             "rct.disasm.shutil.which",
             side_effect=lambda name: {"objdump": "/tools/objdump"}.get(name),
         ):
-            self.assertEqual(cli.find_disassembler(), "/tools/objdump")
+            self.assertEqual(disasm.find_disassembler(), "/tools/objdump")
 
     def test_missing_disassembler_reports_installation_guidance(self) -> None:
         with mock.patch("rct.disasm.shutil.which", return_value=None):
             with self.assertRaisesRegex(
-                cli.DisassemblyError,
+                disasm.DisassemblyError,
                 "Could not find a supported disassembler",
             ):
-                cli.find_disassembler()
+                disasm.find_disassembler()
 
 
 class BuildDisassemblerCommandTests(unittest.TestCase):
     def test_llvm_command_includes_source_and_symbol(self) -> None:
         self.assertEqual(
-            cli.build_disassembler_command(
+            disasm.build_disassembler_command(
                 "/tools/llvm-objdump",
                 "rct_vector_add_f32_auto",
                 Path("/tmp/rct_vector_add_bench"),
@@ -73,7 +73,7 @@ class BuildDisassemblerCommandTests(unittest.TestCase):
 
     def test_gnu_command_omits_source_when_requested(self) -> None:
         self.assertEqual(
-            cli.build_disassembler_command(
+            disasm.build_disassembler_command(
                 "/tools/objdump",
                 "rct_vector_add_f32_scalar",
                 Path("/tmp/rct_vector_add_bench"),
@@ -90,10 +90,10 @@ class BuildDisassemblerCommandTests(unittest.TestCase):
 class DisassembleTests(unittest.TestCase):
     def test_missing_binary_raises_disassembly_error(self) -> None:
         with self.assertRaisesRegex(
-            cli.DisassemblyError,
+            disasm.DisassemblyError,
             "Benchmark binary does not exist",
         ):
-            cli.disassemble(
+            disasm.disassemble(
                 "auto",
                 Path("/missing/rct_vector_add_bench"),
                 "optimized-debug",
@@ -114,10 +114,10 @@ class DisassembleTests(unittest.TestCase):
                 mock.patch("rct.disasm.subprocess.run", return_value=failure),
             ):
                 with self.assertRaisesRegex(
-                    cli.DisassemblyError,
+                    disasm.DisassemblyError,
                     "failed with exit status 1. unsupported binary",
                 ):
-                    cli.disassemble(
+                    disasm.disassemble(
                         "auto", binary, "optimized-debug", include_source=True
                     )
 
@@ -134,7 +134,7 @@ class DisassembleTests(unittest.TestCase):
                 ),
                 mock.patch("rct.disasm.subprocess.run", return_value=success),
             ):
-                output = cli.disassemble(
+                output = disasm.disassemble(
                     "auto", binary, "optimized-debug", include_source=True
                 )
 
