@@ -65,7 +65,7 @@ class CompilerMetadata:
 
 @dataclass(frozen=True)
 class BuildMetadata:
-    preset: str
+    preset: str | None
     kernel_compile_flags: dict[str, list[str]] | None
 
 
@@ -302,7 +302,7 @@ def run_benchmark(
     project_root = Path(__file__).resolve().parent.parent
     build_directory = binary_path.parent if binary is not None else project_root / "build" / preset
     build = BuildMetadata(
-        preset=preset,
+        preset=None if binary is not None else preset,
         kernel_compile_flags=load_kernel_compile_flags(build_directory, project_root),
     )
     return experiment_from_benchmark_protocol(

@@ -2,6 +2,7 @@ import json
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
+import subprocess
 from tempfile import TemporaryDirectory
 import unittest
 from unittest import mock
@@ -14,7 +15,10 @@ from rct.benchmark import (
     experiment_from_benchmark_protocol,
     load_compiler_metadata,
     load_kernel_compile_flags,
+    run_benchmark,
 )
+from rct.disasm import DEFAULT_PRESET, resolve_binary_path
+
 
 
 BENCHMARK_PROTOCOL = "\n".join(
@@ -105,6 +109,67 @@ class ExperimentTests(unittest.TestCase):
             CompilerMetadata(name="GNU", version="16.2.1", path="/usr/bin/cc"),
         )
         self.assertEqual(flags, {"auto": ["-O2", "-O3", "-ftree-vectorize"]})
+
+    def test_explicit_binary_omits_unverified_preset(self) -> None:
+        with TemporaryDirectory() as directory:
+            binary = Path(directory) / "rct_vector_add_bench"
+            binary.touch()
+            result = mock.Mock(
+                returncode=0,
+                stdout=BENCHMARK_PROTOCOL,
+                stderr="",
+            )
+            with mock.patch("rct.benchmark.subprocess.run", return_value=result):
+                experiment = run_benchmark(
+                    binary=binary,
+                    preset="optimized-debug",
+                    length=None,
+                    warmup=None,
+                    iterations=None,
+                    seed=None,
+                )
+
+        self.assertIsNone(experiment.build.preset)
+
+
+class BenchmarkProtocolIntegrationTests(unittest.TestCase):
+    def test_real_benchmark_protocol_parses(self) -> None:
+        binary = resolve_binary_path(None, DEFAULT_PRESET)
+        if not binary.is_file():
+            self.skipTest(f"Built benchmark is unavailable: {binary}")
+
+        result = subprocess.run(
+            [
+                str(binary),
+                "--result-protocol",
+                "--length",
+                "8",
+                "--warmup",
+                "0",
+                "--iterations",
+                "1",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+        experiment = experiment_from_benchmark_protocol(
+            result.stdout,
+            architecture=None,
+            compiler=None,
+            build=BuildMetadata(preset=DEFAULT_PRESET, kernel_compile_flags=None),
+        )
+
+        self.assertEqual(experiment.benchmark.name, "vector_add_f32")
+        self.assertEqual(experiment.benchmark.length, 8)
+        self.assertEqual(
+            list(experiment.implementations), ["reference", "scalar", "auto"]
+        )
+        self.assertTrue(
+            all(result.validation_passed for result in experiment.implementations.values())
+        )
 
 
 class BenchmarkCliTests(unittest.TestCase):
