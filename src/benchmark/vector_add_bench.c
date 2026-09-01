@@ -24,7 +24,8 @@ static const rct_vector_add_f32_benchmark_config DEFAULT_CONFIG = {
 
 static void rct_print_usage(const char *program) {
     printf(
-        "Usage: %s [--length N] [--warmup N] [--iterations N] [--seed N]\n",
+        "Usage: %s [--length N] [--warmup N] [--iterations N] [--seed N] "
+        "[--result-protocol]\n",
         program
     );
 }
@@ -61,7 +62,8 @@ static bool rct_parse_size(const char *text, size_t *value) {
 static bool rct_parse_arguments(
     int argc,
     char **argv,
-    rct_vector_add_f32_benchmark_config *config
+    rct_vector_add_f32_benchmark_config *config,
+    bool *result_protocol_output
 ) {
     for (int index = 1; index < argc; ++index) {
         const char *option = argv[index];
@@ -70,6 +72,10 @@ static bool rct_parse_arguments(
         if (strcmp(option, "--help") == 0 || strcmp(option, "-h") == 0) {
             rct_print_usage(argv[0]);
             exit(EXIT_SUCCESS);
+        }
+        if (strcmp(option, "--result-protocol") == 0) {
+            *result_protocol_output = true;
+            continue;
         }
         if (index + 1 >= argc) {
             fprintf(stderr, "missing value for %s\n", option);
@@ -140,6 +146,33 @@ static void rct_print_results(
     }
 }
 
+static void rct_print_result_protocol(
+    const rct_vector_add_f32_benchmark_config *config,
+    const rct_vector_add_f32_benchmark_result *results,
+    size_t result_count
+) {
+    puts("rct-benchmark-result-v1");
+    printf(
+        "benchmark\tvector_add_f32\t%zu\t%zu\t%zu\t0x%016" PRIx64 "\n",
+        config->length,
+        config->warmup_iterations,
+        config->measured_iterations,
+        config->seed
+    );
+
+    for (size_t index = 0; index < result_count; ++index) {
+        printf(
+            "implementation\t%s\t%s\t%" PRIu64 "\t%.17g\t%.17g\t%zu\n",
+            results[index].implementation_name,
+            results[index].valid ? "true" : "false",
+            results[index].summary.minimum_ns,
+            results[index].summary.median_ns,
+            results[index].summary.mean_ns,
+            results[index].sample_count
+        );
+    }
+}
+
 int main(int argc, char **argv) {
     rct_vector_add_f32_benchmark_config config = DEFAULT_CONFIG;
     rct_vector_add_f32_benchmark_result results[RCT_ARRAY_LENGTH(IMPLEMENTATIONS)] = {
@@ -147,8 +180,9 @@ int main(int argc, char **argv) {
     };
     const char *failed_implementation = NULL;
     rct_vector_add_f32_benchmark_status status;
+    bool result_protocol_output = false;
 
-    if (!rct_parse_arguments(argc, argv, &config)) {
+    if (!rct_parse_arguments(argc, argv, &config, &result_protocol_output)) {
         rct_print_usage(argv[0]);
         return EXIT_FAILURE;
     }
@@ -169,7 +203,11 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
-    rct_print_results(&config, results, RCT_ARRAY_LENGTH(results));
+    if (result_protocol_output) {
+        rct_print_result_protocol(&config, results, RCT_ARRAY_LENGTH(results));
+    } else {
+        rct_print_results(&config, results, RCT_ARRAY_LENGTH(results));
+    }
     rct_vector_add_f32_benchmark_results_destroy(
         results,
         RCT_ARRAY_LENGTH(results)
