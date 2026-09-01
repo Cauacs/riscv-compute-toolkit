@@ -12,10 +12,13 @@ def create_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command")
     disasm_parser = subparsers.add_parser(
-        "disasm", help="Disassemble one benchmark kernel."
+        "disasm", help="Disassemble one or more benchmark kernels."
     )
     disasm_parser.add_argument(
-        "kernel", metavar="KERNEL", help="Kernel alias: reference, scalar, or auto."
+        "kernels",
+        metavar="KERNEL",
+        nargs="+",
+        help="Kernel aliases in display order: reference, scalar, or auto.",
     )
     disasm_parser.add_argument(
         "--binary",
@@ -41,10 +44,25 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "disasm":
         try:
-            output = disassemble(
-                args.kernel, args.binary, args.preset, args.include_source
-            )
+            outputs = [
+                (
+                    kernel,
+                    disassemble(
+                        kernel, args.binary, args.preset, args.include_source
+                    ),
+                )
+                for kernel in args.kernels
+            ]
         except DisassemblyError as error:
             parser.error(str(error))
+
+        if len(outputs) == 1:
+            output = outputs[0][1]
+        else:
+            sections = [
+                f"===== {kernel} =====\n{output.strip(chr(10))}"
+                for kernel, output in outputs
+            ]
+            output = "\n\n".join(sections) + "\n"
         print(output, end="")
     return 0
