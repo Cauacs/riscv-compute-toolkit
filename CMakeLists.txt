@@ -82,6 +82,17 @@ if(NOT RCT_SOURCE_DEBUG)
     endif()
 endif()
 
+if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
+    set(RCT_AUTO_VECTORIZATION_REPORT "${CMAKE_BINARY_DIR}/rct-vectorization/auto.opt")
+    file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/rct-vectorization")
+    file(REMOVE "${RCT_AUTO_VECTORIZATION_REPORT}")
+    set_property(
+        SOURCE ${RCT_AUTO_SOURCE}
+        APPEND PROPERTY COMPILE_OPTIONS
+        "-fopt-info-vec-all=${RCT_AUTO_VECTORIZATION_REPORT}"
+    )
+endif()
+
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(rct_core PRIVATE -Wall -Wextra -Wpedantic)
 endif()

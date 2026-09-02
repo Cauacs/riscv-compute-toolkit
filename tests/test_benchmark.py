@@ -8,6 +8,7 @@ import unittest
 from unittest import mock
 
 from rct import cli
+from rct.capabilities import IsaCapabilities
 from rct.benchmark import (
     BenchmarkError,
     BuildMetadata,
@@ -18,6 +19,7 @@ from rct.benchmark import (
     run_benchmark,
 )
 from rct.disasm import DEFAULT_PRESET, resolve_binary_path
+from rct.vectorization import VectorizationDiagnostic, VectorizationReport
 
 
 
@@ -35,9 +37,25 @@ BENCHMARK_PROTOCOL = "\n".join(
 def make_experiment():
     return experiment_from_benchmark_protocol(
         BENCHMARK_PROTOCOL,
-        architecture=None,
+        architecture="riscv64",
+        isa=IsaCapabilities(vector=True),
         compiler=None,
-        build=BuildMetadata(preset="test", kernel_compile_flags=None),
+        build=BuildMetadata(
+            preset="test",
+            kernel_compile_flags=None,
+            vectorization={
+                "auto": VectorizationReport(
+                    available=True,
+                    optimized=(
+                        VectorizationDiagnostic(
+                            message="loop vectorized",
+                            source="src/kernels/vector_add_auto.c",
+                            line=9,
+                        ),
+                    ),
+                )
+            },
+        ),
     )
 
 
@@ -45,7 +63,7 @@ class ExperimentTests(unittest.TestCase):
     def test_experiment_json_is_versioned_and_preserves_results(self) -> None:
         document = json.loads(make_experiment().to_json())
 
-        self.assertEqual(document["schema_version"], "1.0")
+        self.assertEqual(document["schema_version"], "1.1")
         self.assertEqual(
             document["benchmark"],
             {
@@ -64,9 +82,27 @@ class ExperimentTests(unittest.TestCase):
                 "sample_count": 4,
             },
         )
-        self.assertIsNone(document["environment"]["architecture"])
+        self.assertEqual(
+            document["environment"],
+            {"architecture": "riscv64", "isa": {"vector": True}},
+        )
         self.assertIsNone(document["compiler"])
         self.assertIsNone(document["build"]["kernel_compile_flags"])
+        self.assertEqual(
+            document["build"]["vectorization"]["auto"],
+            {
+                "available": True,
+                "optimized": [
+                    {
+                        "message": "loop vectorized",
+                        "source": "src/kernels/vector_add_auto.c",
+                        "line": 9,
+                        "column": None,
+                    }
+                ],
+                "missed": [],
+            },
+        )
 
     def test_result_protocol_rejects_non_protocol_input(self) -> None:
         with self.assertRaisesRegex(BenchmarkError, "result protocol"):
@@ -180,7 +216,7 @@ class BenchmarkCliTests(unittest.TestCase):
                 result = cli.main(["benchmark", "--json"])
 
         self.assertEqual(result, 0)
-        self.assertEqual(json.loads(stdout.getvalue())["schema_version"], "1.0")
+        self.assertEqual(json.loads(stdout.getvalue())["schema_version"], "1.1")
 
     def test_human_output_remains_available(self) -> None:
         stdout = StringIO()

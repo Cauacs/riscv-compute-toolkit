@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 import json
 import math
 from pathlib import Path
@@ -10,10 +10,12 @@ import shlex
 import subprocess
 from typing import Any
 
+from rct.capabilities import IsaCapabilities, discover_isa_capabilities
 from rct.disasm import resolve_binary_path
+from rct.vectorization import VectorizationReport, load_vectorization_reports
 
 
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "1.1"
 RESULT_PROTOCOL_HEADER = "rct-benchmark-result-v1"
 KERNEL_SOURCES = {
     "reference": "src/kernels/vector_add_reference.c",
@@ -67,7 +69,7 @@ class CompilerMetadata:
 class BuildMetadata:
     preset: str | None
     kernel_compile_flags: dict[str, list[str]] | None
-
+    vectorization: dict[str, VectorizationReport] | None = None
 
 @dataclass(frozen=True)
 class Experiment:
@@ -76,13 +78,19 @@ class Experiment:
     compiler: CompilerMetadata | None
     build: BuildMetadata
     implementations: dict[str, ImplementationResult]
+    environment_isa: IsaCapabilities = field(
+        default_factory=lambda: IsaCapabilities(vector=None)
+    )
     schema_version: str = SCHEMA_VERSION
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "schema_version": self.schema_version,
             "benchmark": asdict(self.benchmark),
-            "environment": {"architecture": self.environment_architecture},
+            "environment": {
+                "architecture": self.environment_architecture,
+                "isa": asdict(self.environment_isa),
+            },
             "compiler": None if self.compiler is None else asdict(self.compiler),
             "build": asdict(self.build),
             "implementations": {
@@ -122,13 +130,13 @@ def _parse_record(
         )
     return fields
 
-
 def experiment_from_benchmark_protocol(
     protocol: str,
     *,
     architecture: str | None,
     compiler: CompilerMetadata | None,
     build: BuildMetadata,
+    isa: IsaCapabilities | None = None,
 ) -> Experiment:
     lines = protocol.splitlines()
     if len(lines) < 3 or lines[0] != RESULT_PROTOCOL_HEADER:
@@ -192,8 +200,8 @@ def experiment_from_benchmark_protocol(
         compiler=compiler,
         build=build,
         implementations=implementations,
+        environment_isa=IsaCapabilities(vector=None) if isa is None else isa,
     )
-
 
 def _cmake_value(text: str, name: str) -> str | None:
     match = re.search(rf'^set\({re.escape(name)} "(?P<value>.*)"\)$', text, re.MULTILINE)
@@ -304,10 +312,13 @@ def run_benchmark(
     build = BuildMetadata(
         preset=None if binary is not None else preset,
         kernel_compile_flags=load_kernel_compile_flags(build_directory, project_root),
+        vectorization=load_vectorization_reports(build_directory, project_root),
     )
+    architecture = platform.machine() or None
     return experiment_from_benchmark_protocol(
         result.stdout,
-        architecture=platform.machine() or None,
+        architecture=architecture,
+        isa=discover_isa_capabilities(architecture),
         compiler=load_compiler_metadata(build_directory),
         build=build,
     )

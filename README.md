@@ -25,6 +25,13 @@ The portable vector-add benchmark measures reference, scalar, and compiler
 auto-vectorized kernels with deterministic inputs and correctness validation.
 RVV execution, run artifacts, and reports remain later Phase 1 steps.
 
+`python -m rct benchmark --json` writes the versioned experiment record. It
+includes the runtime architecture, RISC-V V availability when the Linux kernel
+can report it, actual per-kernel compile flags, and GCC's recorded
+auto-vectorization diagnostics for the `auto` kernel. Unavailable evidence is
+represented explicitly rather than as unsupported hardware or failed
+vectorization.
+
 ## Debugging
 
 See [the GDB debugging guide](docs/debugging.md) for source-debug and
