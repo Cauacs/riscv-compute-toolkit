@@ -11,11 +11,12 @@ import subprocess
 from typing import Any
 
 from rct.capabilities import IsaCapabilities, discover_isa_capabilities
+from rct.codegen import CodegenReport, load_codegen_reports
 from rct.disasm import resolve_binary_path
 from rct.vectorization import VectorizationReport, load_vectorization_reports
 
 
-SCHEMA_VERSION = "1.1"
+SCHEMA_VERSION = "1.2"
 RESULT_PROTOCOL_HEADER = "rct-benchmark-result-v1"
 KERNEL_SOURCES = {
     "reference": "src/kernels/vector_add_reference.c",
@@ -81,6 +82,7 @@ class Experiment:
     environment_isa: IsaCapabilities = field(
         default_factory=lambda: IsaCapabilities(vector=None)
     )
+    codegen: dict[str, CodegenReport] | None = None
     schema_version: str = SCHEMA_VERSION
 
     def to_dict(self) -> dict[str, Any]:
@@ -93,6 +95,11 @@ class Experiment:
             },
             "compiler": None if self.compiler is None else asdict(self.compiler),
             "build": asdict(self.build),
+            "codegen": (
+                None
+                if self.codegen is None
+                else {kernel: asdict(report) for kernel, report in self.codegen.items()}
+            ),
             "implementations": {
                 name: result.to_dict()
                 for name, result in self.implementations.items()
@@ -137,6 +144,7 @@ def experiment_from_benchmark_protocol(
     compiler: CompilerMetadata | None,
     build: BuildMetadata,
     isa: IsaCapabilities | None = None,
+    codegen: dict[str, CodegenReport] | None = None,
 ) -> Experiment:
     lines = protocol.splitlines()
     if len(lines) < 3 or lines[0] != RESULT_PROTOCOL_HEADER:
@@ -201,6 +209,7 @@ def experiment_from_benchmark_protocol(
         build=build,
         implementations=implementations,
         environment_isa=IsaCapabilities(vector=None) if isa is None else isa,
+        codegen=codegen,
     )
 
 def _cmake_value(text: str, name: str) -> str | None:
@@ -321,6 +330,7 @@ def run_benchmark(
         isa=discover_isa_capabilities(architecture),
         compiler=load_compiler_metadata(build_directory),
         build=build,
+        codegen=load_codegen_reports(binary_path, preset),
     )
 
 

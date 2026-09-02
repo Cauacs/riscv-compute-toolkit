@@ -18,6 +18,64 @@ option(
     OFF
 )
 
+option(
+    RCT_ENABLE_RVV
+    "Compile scalar and auto kernels for an explicitly selected RISC-V V ISA"
+    OFF
+)
+set(
+    RCT_RISCV_ARCH
+    ""
+    CACHE STRING
+    "Explicit RISC-V ISA passed as -march when RCT_ENABLE_RVV is enabled"
+)
+set(
+    RCT_RISCV_ABI
+    ""
+    CACHE STRING
+    "Optional RISC-V ABI passed as -mabi when RCT_ENABLE_RVV is enabled"
+)
+
+if(RCT_ENABLE_RVV)
+    if(NOT CMAKE_C_COMPILER_ID STREQUAL "GNU")
+        message(FATAL_ERROR "RCT_ENABLE_RVV requires a GNU C compiler.")
+    endif()
+    if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^[Rr][Ii][Ss][Cc][Vv]")
+        message(
+            FATAL_ERROR
+            "RCT_ENABLE_RVV requires a RISC-V target system; "
+            "CMAKE_SYSTEM_PROCESSOR is '${CMAKE_SYSTEM_PROCESSOR}'."
+        )
+    endif()
+    if(RCT_SOURCE_DEBUG)
+        message(FATAL_ERROR "RCT_ENABLE_RVV requires RCT_SOURCE_DEBUG=OFF.")
+    endif()
+    if(RCT_RISCV_ARCH STREQUAL "")
+        message(
+            FATAL_ERROR
+            "RCT_ENABLE_RVV requires RCT_RISCV_ARCH, for example "
+            "-DRCT_RISCV_ARCH=<explicit-rvv-capable-isa>."
+        )
+    endif()
+    if(NOT RCT_RISCV_ARCH MATCHES "^rv(32|64)[a-z]*v([a-z0-9_].*)?$")
+        message(
+            FATAL_ERROR
+            "RCT_RISCV_ARCH must name a lowercase rv32/rv64 ISA containing "
+            "the ratified V extension; got '${RCT_RISCV_ARCH}'."
+        )
+    endif()
+
+    set(RCT_RISCV_ARCH_FLAG "-march=${RCT_RISCV_ARCH}")
+    set_property(
+        SOURCE ${RCT_SCALAR_SOURCE} ${RCT_AUTO_SOURCE}
+        APPEND PROPERTY COMPILE_OPTIONS "${RCT_RISCV_ARCH_FLAG}"
+    )
+    if(NOT RCT_RISCV_ABI STREQUAL "")
+        add_compile_options("-mabi=${RCT_RISCV_ABI}")
+    endif()
+    message(STATUS "RCT RVV target: ${RCT_RISCV_ARCH_FLAG}")
+endif()
+
 if(RCT_SOURCE_DEBUG)
     if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
         add_compile_options(-Og -g3 -fno-omit-frame-pointer)

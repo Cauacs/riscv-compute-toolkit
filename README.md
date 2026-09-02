@@ -32,6 +32,29 @@ auto-vectorization diagnostics for the `auto` kernel. Unavailable evidence is
 represented explicitly rather than as unsupported hardware or failed
 vectorization.
 
+## RVV auto-vectorization experiment
+
+The baseline remains host-portable:
+
+```text
+cmake --preset optimized-debug
+cmake --build --preset optimized-debug
+```
+
+On a native RISC-V GNU build, use a separate build directory and provide the
+target ISA deliberately:
+
+```text
+cmake --preset optimized-debug-rvv -DRCT_RISCV_ARCH=<explicit-rvv-capable-isa>
+cmake --build --preset optimized-debug-rvv
+```
+
+`RCT_RISCV_ARCH` becomes `-march=<value>` for the `scalar` and `auto` kernels;
+the low-optimization `reference` kernel stays ISA-neutral. Set
+`RCT_RISCV_ABI=<abi>` when an explicit ABI is required. The JSON experiment
+record captures the resulting commands, compiler diagnostics, and an RVV
+mnemonic classification for `scalar` and `auto`.
+
 ## Debugging
 
 See [the GDB debugging guide](docs/debugging.md) for source-debug and

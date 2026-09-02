@@ -9,6 +9,7 @@ from unittest import mock
 
 from rct import cli
 from rct.capabilities import IsaCapabilities
+from rct.codegen import CodegenReport
 from rct.benchmark import (
     BenchmarkError,
     BuildMetadata,
@@ -56,6 +57,15 @@ def make_experiment():
                 )
             },
         ),
+        codegen={
+            "scalar": CodegenReport(available=True, rvv_instructions=False),
+            "auto": CodegenReport(
+                available=True,
+                rvv_instructions=True,
+                isa="rvv",
+                recognized_mnemonics=("vsetvli", "vfadd.vv"),
+            ),
+        },
     )
 
 
@@ -63,7 +73,7 @@ class ExperimentTests(unittest.TestCase):
     def test_experiment_json_is_versioned_and_preserves_results(self) -> None:
         document = json.loads(make_experiment().to_json())
 
-        self.assertEqual(document["schema_version"], "1.1")
+        self.assertEqual(document["schema_version"], "1.2")
         self.assertEqual(
             document["benchmark"],
             {
@@ -101,6 +111,23 @@ class ExperimentTests(unittest.TestCase):
                     }
                 ],
                 "missed": [],
+            },
+        )
+        self.assertEqual(
+            document["codegen"],
+            {
+                "scalar": {
+                    "available": True,
+                    "rvv_instructions": False,
+                    "isa": None,
+                    "recognized_mnemonics": [],
+                },
+                "auto": {
+                    "available": True,
+                    "rvv_instructions": True,
+                    "isa": "rvv",
+                    "recognized_mnemonics": ["vsetvli", "vfadd.vv"],
+                },
             },
         )
 
@@ -155,7 +182,19 @@ class ExperimentTests(unittest.TestCase):
                 stdout=BENCHMARK_PROTOCOL,
                 stderr="",
             )
-            with mock.patch("rct.benchmark.subprocess.run", return_value=result):
+            codegen = {
+                "scalar": CodegenReport(available=True, rvv_instructions=False),
+                "auto": CodegenReport(
+                    available=True,
+                    rvv_instructions=True,
+                    isa="rvv",
+                    recognized_mnemonics=("vsetvli",),
+                ),
+            }
+            with (
+                mock.patch("rct.benchmark.subprocess.run", return_value=result),
+                mock.patch("rct.benchmark.load_codegen_reports", return_value=codegen),
+            ):
                 experiment = run_benchmark(
                     binary=binary,
                     preset="optimized-debug",
@@ -166,6 +205,7 @@ class ExperimentTests(unittest.TestCase):
                 )
 
         self.assertIsNone(experiment.build.preset)
+        self.assertEqual(experiment.codegen, codegen)
 
 
 class BenchmarkProtocolIntegrationTests(unittest.TestCase):
@@ -216,7 +256,7 @@ class BenchmarkCliTests(unittest.TestCase):
                 result = cli.main(["benchmark", "--json"])
 
         self.assertEqual(result, 0)
-        self.assertEqual(json.loads(stdout.getvalue())["schema_version"], "1.1")
+        self.assertEqual(json.loads(stdout.getvalue())["schema_version"], "1.2")
 
     def test_human_output_remains_available(self) -> None:
         stdout = StringIO()

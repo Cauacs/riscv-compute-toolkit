@@ -29,6 +29,19 @@
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "RCT_SOURCE_DEBUG": "OFF"
       }
+    },
+    {
+      "name": "optimized-debug-rvv",
+      "displayName": "Optimized Debug RVV",
+      "generator": "Unix Makefiles",
+      "description": "RVV-targeted experiment; requires -DRCT_RISCV_ARCH=<explicit-rvv-capable-isa>.",
+      "binaryDir": "${sourceDir}/build/optimized-debug-rvv",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "RCT_SOURCE_DEBUG": "OFF",
+        "RCT_ENABLE_RVV": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -39,6 +52,10 @@
     {
       "name": "optimized-debug",
       "configurePreset": "optimized-debug"
+    },
+    {
+      "name": "optimized-debug-rvv",
+      "configurePreset": "optimized-debug-rvv"
     }
   ]
 }
