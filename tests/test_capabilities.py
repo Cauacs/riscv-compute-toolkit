@@ -1,9 +1,12 @@
+import ctypes
 import unittest
 from unittest import mock
 
 from rct.capabilities import (
     IsaCapabilities,
+    _RiscvHwprobe,
     _proc_cpuinfo_vector,
+    _riscv_hwprobe_vector,
     discover_isa_capabilities,
 )
 
@@ -33,6 +36,19 @@ class CapabilityDiscoveryTests(unittest.TestCase):
 
         self.assertEqual(capabilities, IsaCapabilities(vector=False))
         cpuinfo.assert_not_called()
+
+    def test_unknown_hwprobe_key_is_not_reported_as_missing_vector_support(self) -> None:
+        def syscall(*arguments: object) -> int:
+            probe = ctypes.cast(
+                arguments[1], ctypes.POINTER(_RiscvHwprobe)
+            ).contents
+            probe.key = -1
+            return 0
+
+        library = mock.Mock()
+        library.syscall.side_effect = syscall
+        with mock.patch("rct.capabilities.ctypes.CDLL", return_value=library):
+            self.assertIsNone(_riscv_hwprobe_vector())
 
     def test_unavailable_hwprobe_uses_kernel_isa_fallback(self) -> None:
         with (

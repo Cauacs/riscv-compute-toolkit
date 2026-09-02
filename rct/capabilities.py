@@ -34,6 +34,8 @@ def _riscv_hwprobe_vector() -> bool | None:
     except (AttributeError, OSError):
         return None
     if result == 0:
+        if probe.key == -1:
+            return None
         return bool(probe.value & _RISCV_HWPROBE_IMA_V)
     if ctypes.get_errno() in (errno.ENOSYS, errno.EINVAL):
         return None
