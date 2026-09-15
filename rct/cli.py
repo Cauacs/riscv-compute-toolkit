@@ -2,7 +2,8 @@ import argparse
 from collections.abc import Sequence
 from pathlib import Path
 
-from rct.benchmark import BenchmarkError, render_experiment, run_benchmark
+from rct.benchmark import BenchmarkError, run_benchmark
+from rct.experiment import render_experiment
 from rct.disasm import DEFAULT_PRESET, DisassemblyError, disassemble
 
 

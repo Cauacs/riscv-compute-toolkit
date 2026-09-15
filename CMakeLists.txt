@@ -57,6 +57,7 @@ if(RCT_ENABLE_RVV)
             "-DRCT_RISCV_ARCH=<explicit-rvv-capable-isa>."
         )
     endif()
+    # This only guards the experiment's full-V invariant; GCC validates ISA syntax.
     if(NOT RCT_RISCV_ARCH MATCHES "^rv(32|64)[a-z]*v([a-z0-9_].*)?$")
         message(
             FATAL_ERROR

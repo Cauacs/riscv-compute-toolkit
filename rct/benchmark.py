@@ -1,22 +1,29 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
-import json
 import math
 from pathlib import Path
 import platform
-import re
-import shlex
 import subprocess
-from typing import Any
 
+from rct.build_metadata import (
+    BuildMetadataError,
+    load_compiler_metadata,
+    load_kernel_compile_flags,
+)
 from rct.capabilities import IsaCapabilities, discover_isa_capabilities
 from rct.codegen import CodegenReport, load_codegen_reports
 from rct.disasm import resolve_binary_path
-from rct.vectorization import VectorizationReport, load_vectorization_reports
+from rct.experiment import (
+    BenchmarkMetadata,
+    BuildMetadata,
+    CompilerMetadata,
+    Experiment,
+    ImplementationResult,
+    Timing,
+)
+from rct.vectorization import load_vectorization_reports
 
 
-SCHEMA_VERSION = "1.2"
 RESULT_PROTOCOL_HEADER = "rct-benchmark-result-v1"
 KERNEL_SOURCES = {
     "reference": "src/kernels/vector_add_reference.c",
@@ -26,88 +33,7 @@ KERNEL_SOURCES = {
 
 
 class BenchmarkError(RuntimeError):
-    """Raised when the benchmark process or its result payload is unusable."""
-
-
-@dataclass(frozen=True)
-class BenchmarkMetadata:
-    name: str
-    length: int
-    warmup_iterations: int
-    measured_iterations: int
-    seed: str
-
-
-@dataclass(frozen=True)
-class Timing:
-    min_ns: int
-    median_ns: float
-    mean_ns: float
-
-
-@dataclass(frozen=True)
-class ImplementationResult:
-    validation_passed: bool
-    timing: Timing
-    sample_count: int
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "validation": {"passed": self.validation_passed},
-            "timing": asdict(self.timing),
-            "sample_count": self.sample_count,
-        }
-
-
-@dataclass(frozen=True)
-class CompilerMetadata:
-    name: str | None
-    version: str | None
-    path: str | None
-
-
-@dataclass(frozen=True)
-class BuildMetadata:
-    preset: str | None
-    kernel_compile_flags: dict[str, list[str]] | None
-    vectorization: dict[str, VectorizationReport] | None = None
-
-@dataclass(frozen=True)
-class Experiment:
-    benchmark: BenchmarkMetadata
-    environment_architecture: str | None
-    compiler: CompilerMetadata | None
-    build: BuildMetadata
-    implementations: dict[str, ImplementationResult]
-    environment_isa: IsaCapabilities = field(
-        default_factory=lambda: IsaCapabilities(vector=None)
-    )
-    codegen: dict[str, CodegenReport] | None = None
-    schema_version: str = SCHEMA_VERSION
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "schema_version": self.schema_version,
-            "benchmark": asdict(self.benchmark),
-            "environment": {
-                "architecture": self.environment_architecture,
-                "isa": asdict(self.environment_isa),
-            },
-            "compiler": None if self.compiler is None else asdict(self.compiler),
-            "build": asdict(self.build),
-            "codegen": (
-                None
-                if self.codegen is None
-                else {kernel: asdict(report) for kernel, report in self.codegen.items()}
-            ),
-            "implementations": {
-                name: result.to_dict()
-                for name, result in self.implementations.items()
-            },
-        }
-
-    def to_json(self) -> str:
-        return json.dumps(self.to_dict(), indent=2, sort_keys=True) + "\n"
+    """Raised when benchmark execution or result data cannot be interpreted."""
 
 
 def _parse_nonnegative_int(value: str, field: str) -> int:
@@ -136,6 +62,7 @@ def _parse_record(
             f"with {field_count - 1} fields."
         )
     return fields
+
 
 def experiment_from_benchmark_protocol(
     protocol: str,
@@ -212,75 +139,6 @@ def experiment_from_benchmark_protocol(
         codegen=codegen,
     )
 
-def _cmake_value(text: str, name: str) -> str | None:
-    match = re.search(rf'^set\({re.escape(name)} "(?P<value>.*)"\)$', text, re.MULTILINE)
-    return None if match is None else match.group("value")
-
-
-def load_compiler_metadata(build_directory: Path) -> CompilerMetadata | None:
-    compiler_files = sorted((build_directory / "CMakeFiles").glob("*/CMakeCCompiler.cmake"))
-    if not compiler_files:
-        return None
-
-    text = compiler_files[-1].read_text(encoding="utf-8")
-    return CompilerMetadata(
-        name=_cmake_value(text, "CMAKE_C_COMPILER_ID"),
-        version=_cmake_value(text, "CMAKE_C_COMPILER_VERSION"),
-        path=_cmake_value(text, "CMAKE_C_COMPILER"),
-    )
-
-
-def _compile_flags(entry: dict[str, Any]) -> list[str]:
-    command = entry.get("command")
-    if not isinstance(command, str):
-        return []
-    arguments = shlex.split(command)
-    if not arguments:
-        return []
-
-    source = entry.get("file")
-    flags: list[str] = []
-    index = 1
-    while index < len(arguments):
-        argument = arguments[index]
-        if argument == "-o":
-            index += 2
-            continue
-        if argument == "-c" or argument == source:
-            index += 1
-            continue
-        flags.append(argument)
-        index += 1
-    return flags
-
-
-def load_kernel_compile_flags(
-    build_directory: Path, project_root: Path
-) -> dict[str, list[str]] | None:
-    compile_commands_path = build_directory / "compile_commands.json"
-    if not compile_commands_path.is_file():
-        return None
-
-    try:
-        entries = json.loads(compile_commands_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as error:
-        raise BenchmarkError(
-            f"Could not parse compile commands at {compile_commands_path}: {error.msg}."
-        ) from error
-    if not isinstance(entries, list):
-        raise BenchmarkError(f"Compile commands at {compile_commands_path} must be a JSON array.")
-
-    flags: dict[str, list[str]] = {}
-    for name, relative_source in KERNEL_SOURCES.items():
-        expected_source = (project_root / relative_source).resolve()
-        for entry in entries:
-            if not isinstance(entry, dict) or not isinstance(entry.get("file"), str):
-                continue
-            if Path(entry["file"]).resolve() == expected_source:
-                flags[name] = _compile_flags(entry)
-                break
-    return flags
-
 
 def run_benchmark(
     *,
@@ -318,39 +176,24 @@ def run_benchmark(
 
     project_root = Path(__file__).resolve().parent.parent
     build_directory = binary_path.parent if binary is not None else project_root / "build" / preset
-    build = BuildMetadata(
-        preset=None if binary is not None else preset,
-        kernel_compile_flags=load_kernel_compile_flags(build_directory, project_root),
-        vectorization=load_vectorization_reports(build_directory, project_root),
-    )
+    try:
+        build = BuildMetadata(
+            preset=None if binary is not None else preset,
+            kernel_compile_flags=load_kernel_compile_flags(
+                build_directory, project_root, KERNEL_SOURCES
+            ),
+            vectorization=load_vectorization_reports(build_directory, project_root),
+        )
+        compiler = load_compiler_metadata(build_directory)
+    except BuildMetadataError as error:
+        raise BenchmarkError(str(error)) from error
+
     architecture = platform.machine() or None
     return experiment_from_benchmark_protocol(
         result.stdout,
         architecture=architecture,
         isa=discover_isa_capabilities(architecture),
-        compiler=load_compiler_metadata(build_directory),
+        compiler=compiler,
         build=build,
         codegen=load_codegen_reports(binary_path, preset),
     )
-
-
-def render_experiment(experiment: Experiment) -> str:
-    benchmark = experiment.benchmark
-    lines = [
-        f"RCT {benchmark.name}",
-        "",
-        f"architecture: {experiment.environment_architecture or 'unavailable'}",
-        f"length:       {benchmark.length}",
-        f"warmup:       {benchmark.warmup_iterations}",
-        f"iterations:   {benchmark.measured_iterations}",
-        f"seed:         {benchmark.seed}",
-        "",
-        f"{'implementation':<16} {'valid':<7} {'median ns':<12} {'mean ns':<12} {'min ns':<12} {'samples':<8}",
-    ]
-    for name, result in experiment.implementations.items():
-        lines.append(
-            f"{name:<16} {'yes' if result.validation_passed else 'no':<7} "
-            f"{result.timing.median_ns:<12.1f} {result.timing.mean_ns:<12.1f} "
-            f"{result.timing.min_ns:<12} {result.sample_count:<8}"
-        )
-    return "\n".join(lines) + "\n"

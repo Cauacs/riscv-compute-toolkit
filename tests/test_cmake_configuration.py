@@ -10,7 +10,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 @unittest.skipUnless(shutil.which("cmake"), "CMake is required")
-class RvvCmakeConfigurationTests(unittest.TestCase):
+class RvvConfigurationPlumbingTests(unittest.TestCase):
+    """Verify generated commands only; these tests do not compile RISC-V objects."""
     def configure(self, *definitions: str) -> tuple[subprocess.CompletedProcess[str], Path]:
         directory = TemporaryDirectory()
         self.addCleanup(directory.cleanup)
@@ -41,7 +42,7 @@ class RvvCmakeConfigurationTests(unittest.TestCase):
             if Path(entry["file"]).parent.name == "kernels"
         }
 
-    def test_baseline_has_no_riscv_target_and_keeps_vectorization_policy(self) -> None:
+    def test_baseline_configuration_emits_no_riscv_target_flags(self) -> None:
         result, build_directory = self.configure("-DRCT_SOURCE_DEBUG=OFF")
         self.assertEqual(result.returncode, 0, result.stderr)
 
@@ -51,7 +52,7 @@ class RvvCmakeConfigurationTests(unittest.TestCase):
         self.assertIn("-fno-tree-vectorize", commands["vector_add_scalar.c"])
         self.assertIn("-ftree-vectorize", commands["vector_add_auto.c"])
 
-    def test_rvv_target_applies_same_isa_to_scalar_and_auto_only(self) -> None:
+    def test_rvv_configuration_emits_expected_compile_flags(self) -> None:
         result, build_directory = self.configure(
             "-DCMAKE_SYSTEM_NAME=Linux",
             "-DCMAKE_SYSTEM_PROCESSOR=riscv64",
@@ -73,7 +74,7 @@ class RvvCmakeConfigurationTests(unittest.TestCase):
         self.assertIn("-fno-tree-vectorize", scalar)
         self.assertIn("-ftree-vectorize", auto)
 
-    def test_rvv_target_rejects_a_non_riscv_build_host(self) -> None:
+    def test_rvv_configuration_rejects_a_non_riscv_target(self) -> None:
         result, _ = self.configure(
             "-DCMAKE_SYSTEM_NAME=Linux",
             "-DCMAKE_SYSTEM_PROCESSOR=x86_64",

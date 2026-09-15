@@ -29,35 +29,33 @@ _RVV_MNEMONIC = re.compile(
 
 @dataclass(frozen=True)
 class CodegenReport:
+    """Narrow evidence from recognized RVV mnemonics in one function."""
+
     available: bool
-    rvv_instructions: bool | None
-    isa: str | None = None
+    recognized_rvv: bool | None
     recognized_mnemonics: tuple[str, ...] = ()
 
 
 def classify_rvv_codegen(disassembly: str) -> CodegenReport:
-    """Classify a single function's disassembly using narrow RVV mnemonic families."""
+    """Recognize a useful subset of RVV mnemonics in one function's disassembly."""
     if _DISASSEMBLY_HEADER.search(disassembly) is None:
-        return CodegenReport(available=False, rvv_instructions=None)
+        return CodegenReport(available=False, recognized_rvv=None)
 
     mnemonics = [
         match.group("mnemonic").lower()
         for match in _INSTRUCTION.finditer(disassembly)
     ]
     if not mnemonics:
-        return CodegenReport(available=False, rvv_instructions=None)
+        return CodegenReport(available=False, recognized_rvv=None)
 
     recognized = tuple(
         dict.fromkeys(mnemonic for mnemonic in mnemonics if _RVV_MNEMONIC.match(mnemonic))
     )
-    if recognized:
-        return CodegenReport(
-            available=True,
-            rvv_instructions=True,
-            isa="rvv",
-            recognized_mnemonics=recognized,
-        )
-    return CodegenReport(available=True, rvv_instructions=False)
+    return CodegenReport(
+        available=True,
+        recognized_rvv=bool(recognized),
+        recognized_mnemonics=recognized,
+    )
 
 
 def load_codegen_reports(
@@ -69,7 +67,7 @@ def load_codegen_reports(
         try:
             assembly = disassemble(kernel, binary, preset, include_source=False)
         except DisassemblyError:
-            reports[kernel] = CodegenReport(available=False, rvv_instructions=None)
+            reports[kernel] = CodegenReport(available=False, recognized_rvv=None)
         else:
             reports[kernel] = classify_rvv_codegen(assembly)
     return reports

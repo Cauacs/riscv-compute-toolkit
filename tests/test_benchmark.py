@@ -10,15 +10,9 @@ from unittest import mock
 from rct import cli
 from rct.capabilities import IsaCapabilities
 from rct.codegen import CodegenReport
-from rct.benchmark import (
-    BenchmarkError,
-    BuildMetadata,
-    CompilerMetadata,
-    experiment_from_benchmark_protocol,
-    load_compiler_metadata,
-    load_kernel_compile_flags,
-    run_benchmark,
-)
+from rct.benchmark import BenchmarkError, experiment_from_benchmark_protocol, run_benchmark
+from rct.build_metadata import load_compiler_metadata, load_kernel_compile_flags
+from rct.experiment import BuildMetadata, CompilerMetadata
 from rct.disasm import DEFAULT_PRESET, resolve_binary_path
 from rct.vectorization import VectorizationDiagnostic, VectorizationReport
 
@@ -58,11 +52,10 @@ def make_experiment():
             },
         ),
         codegen={
-            "scalar": CodegenReport(available=True, rvv_instructions=False),
+            "scalar": CodegenReport(available=True, recognized_rvv=False),
             "auto": CodegenReport(
                 available=True,
-                rvv_instructions=True,
-                isa="rvv",
+                recognized_rvv=True,
                 recognized_mnemonics=("vsetvli", "vfadd.vv"),
             ),
         },
@@ -73,7 +66,7 @@ class ExperimentTests(unittest.TestCase):
     def test_experiment_json_is_versioned_and_preserves_results(self) -> None:
         document = json.loads(make_experiment().to_json())
 
-        self.assertEqual(document["schema_version"], "1.2")
+        self.assertEqual(document["schema_version"], "1.3")
         self.assertEqual(
             document["benchmark"],
             {
@@ -118,14 +111,12 @@ class ExperimentTests(unittest.TestCase):
             {
                 "scalar": {
                     "available": True,
-                    "rvv_instructions": False,
-                    "isa": None,
+                    "recognized_rvv": False,
                     "recognized_mnemonics": [],
                 },
                 "auto": {
                     "available": True,
-                    "rvv_instructions": True,
-                    "isa": "rvv",
+                    "recognized_rvv": True,
                     "recognized_mnemonics": ["vsetvli", "vfadd.vv"],
                 },
             },
@@ -165,7 +156,11 @@ class ExperimentTests(unittest.TestCase):
             )
 
             compiler = load_compiler_metadata(build_directory)
-            flags = load_kernel_compile_flags(build_directory, project_root)
+            flags = load_kernel_compile_flags(
+                build_directory,
+                project_root,
+                {"auto": "src/kernels/vector_add_auto.c"},
+            )
 
         self.assertEqual(
             compiler,
@@ -183,11 +178,10 @@ class ExperimentTests(unittest.TestCase):
                 stderr="",
             )
             codegen = {
-                "scalar": CodegenReport(available=True, rvv_instructions=False),
+                "scalar": CodegenReport(available=True, recognized_rvv=False),
                 "auto": CodegenReport(
                     available=True,
-                    rvv_instructions=True,
-                    isa="rvv",
+                    recognized_rvv=True,
                     recognized_mnemonics=("vsetvli",),
                 ),
             }
@@ -256,7 +250,7 @@ class BenchmarkCliTests(unittest.TestCase):
                 result = cli.main(["benchmark", "--json"])
 
         self.assertEqual(result, 0)
-        self.assertEqual(json.loads(stdout.getvalue())["schema_version"], "1.2")
+        self.assertEqual(json.loads(stdout.getvalue())["schema_version"], "1.3")
 
     def test_human_output_remains_available(self) -> None:
         stdout = StringIO()

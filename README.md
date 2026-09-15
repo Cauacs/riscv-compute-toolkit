@@ -23,7 +23,8 @@ python -m rct --help
 
 The portable vector-add benchmark measures reference, scalar, and compiler
 auto-vectorized kernels with deterministic inputs and correctness validation.
-RVV execution, run artifacts, and reports remain later Phase 1 steps.
+RVV codegen evidence is collected separately from runtime capability and
+compiler-decision evidence.
 
 `python -m rct benchmark --json` writes the versioned experiment record. It
 includes the runtime architecture, RISC-V V availability when the Linux kernel
@@ -52,8 +53,9 @@ cmake --build --preset optimized-debug-rvv
 `RCT_RISCV_ARCH` becomes `-march=<value>` for the `scalar` and `auto` kernels;
 the low-optimization `reference` kernel stays ISA-neutral. Set
 `RCT_RISCV_ABI=<abi>` when an explicit ABI is required. The JSON experiment
-record captures the resulting commands, compiler diagnostics, and an RVV
-mnemonic classification for `scalar` and `auto`.
+record captures the resulting commands, compiler diagnostics, and recognized
+RVV mnemonic evidence for `scalar` and `auto`; no recognized mnemonic is not a
+claim that a function contains no possible RVV instruction.
 
 ## Debugging
 
