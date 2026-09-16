@@ -1,5 +1,5 @@
 #include "input.h"
-#include "vector_add_benchmark.h"
+#include "vector_add_benchmark_runner.h"
 #include "rct/kernels.h"
 #include "rct/validation.h"
 

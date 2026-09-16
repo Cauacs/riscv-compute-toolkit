@@ -97,7 +97,7 @@ add_library(
     ${RCT_AUTO_SOURCE}
     src/benchmark/input.c
     src/benchmark/validation.c
-    src/benchmark/vector_add_benchmark.c
+    src/benchmark/vector_add_benchmark_runner.c
 )
 target_include_directories(
     rct_core

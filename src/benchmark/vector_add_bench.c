@@ -1,4 +1,4 @@
-#include "vector_add_benchmark.h"
+#include "vector_add_benchmark_runner.h"
 
 #include <errno.h>
 #include <inttypes.h>

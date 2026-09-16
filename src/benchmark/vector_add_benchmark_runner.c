@@ -1,4 +1,4 @@
-#include "vector_add_benchmark.h"
+#include "vector_add_benchmark_runner.h"
 
 #include "input.h"
 #include "rct/validation.h"
