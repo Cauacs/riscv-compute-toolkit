@@ -60,14 +60,14 @@ class BuildDisassemblerCommandTests(unittest.TestCase):
             disasm.build_disassembler_command(
                 "/tools/llvm-objdump",
                 "rct_vector_add_f32_auto",
-                Path("/tmp/rct_vector_add_bench"),
+                Path("/tmp/rct_bench"),
                 include_source=True,
             ),
             [
                 "/tools/llvm-objdump",
                 "--source",
                 "--disassemble-symbols=rct_vector_add_f32_auto",
-                "/tmp/rct_vector_add_bench",
+                "/tmp/rct_bench",
             ],
         )
 
@@ -76,13 +76,13 @@ class BuildDisassemblerCommandTests(unittest.TestCase):
             disasm.build_disassembler_command(
                 "/tools/objdump",
                 "rct_vector_add_f32_scalar",
-                Path("/tmp/rct_vector_add_bench"),
+                Path("/tmp/rct_bench"),
                 include_source=False,
             ),
             [
                 "/tools/objdump",
                 "--disassemble=rct_vector_add_f32_scalar",
-                "/tmp/rct_vector_add_bench",
+                "/tmp/rct_bench",
             ],
         )
 
@@ -95,14 +95,14 @@ class DisassembleTests(unittest.TestCase):
         ):
             disasm.disassemble(
                 "auto",
-                Path("/missing/rct_vector_add_bench"),
+                Path("/missing/rct_bench"),
                 "optimized-debug",
                 include_source=True,
             )
 
     def test_failed_disassembler_reports_stderr(self) -> None:
         with TemporaryDirectory() as directory:
-            binary = Path(directory) / "rct_vector_add_bench"
+            binary = Path(directory) / "rct_bench"
             binary.touch()
             failure = subprocess.CompletedProcess(
                 args=[], returncode=1, stdout="", stderr="unsupported binary"
@@ -123,7 +123,7 @@ class DisassembleTests(unittest.TestCase):
 
     def test_successful_disassembly_returns_stdout(self) -> None:
         with TemporaryDirectory() as directory:
-            binary = Path(directory) / "rct_vector_add_bench"
+            binary = Path(directory) / "rct_bench"
             binary.touch()
             success = subprocess.CompletedProcess(
                 args=[], returncode=0, stdout="disassembly\n", stderr=""

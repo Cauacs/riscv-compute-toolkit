@@ -5,7 +5,7 @@ import gdb
 
 _PIPELINE_BREAKPOINTS = (
     ("benchmark entry", "main"),
-    ("benchmark orchestration", "rct_run_vector_add_f32_benchmark"),
+    ("benchmark orchestration", "rct_run_benchmark"),
     ("deterministic input generation", "rct_fill_vector_add_f32_inputs"),
     ("scalar vector-add kernel", "rct_vector_add_f32_scalar"),
     ("numerical validation", "rct_validate_f32"),
@@ -27,9 +27,7 @@ class RctHelp(gdb.Command):
         _write_line("RCT GDB commands:")
         _write_line("  rct-help             Show this help.")
         _write_line("  rct-break-pipeline   Break on the current vector-add pipeline.")
-        _write_line(
-            "  rct-show-config      Show configuration in rct_run_vector_add_f32_benchmark."
-        )
+        _write_line("  rct-show-config      Show generic configuration in rct_run_benchmark.")
 
 
 class RctBreakPipeline(gdb.Command):
@@ -58,7 +56,7 @@ class RctBreakPipeline(gdb.Command):
 
 
 class RctShowConfig(gdb.Command):
-    """Show the active benchmark configuration without parsing GDB text output."""
+    """Show the active generic run configuration without parsing GDB text."""
 
     def __init__(self):
         super().__init__("rct-show-config", gdb.COMMAND_DATA)
@@ -69,13 +67,13 @@ class RctShowConfig(gdb.Command):
         benchmark_frame = selected_frame
 
         while benchmark_frame is not None:
-            if benchmark_frame.name() == "rct_run_vector_add_f32_benchmark":
+            if benchmark_frame.name() == "rct_run_benchmark":
                 break
             benchmark_frame = benchmark_frame.older()
 
         if benchmark_frame is None:
             _write_line(
-                "RCT: no active rct_run_vector_add_f32_benchmark frame; "
+                "RCT: no active rct_run_benchmark frame; "
                 "stop in the benchmark orchestration first."
             )
             return
@@ -84,22 +82,18 @@ class RctShowConfig(gdb.Command):
         try:
             # parse_and_eval evaluates in the selected frame, avoiding fragile
             # parsing of GDB's human-oriented `print` output.
-            config = gdb.parse_and_eval("config").dereference()
-            length = int(config["length"])
-            warmup = int(config["warmup_iterations"])
-            iterations = int(config["measured_iterations"])
-            seed = int(config["seed"])
+            run_config = gdb.parse_and_eval("run_config").dereference()
+            warmup = int(run_config["warmup_iterations"])
+            iterations = int(run_config["measured_iterations"])
         except gdb.error as error:
-            _write_line(f"RCT: could not read benchmark configuration: {error}")
+            _write_line(f"RCT: could not read generic run configuration: {error}")
             return
         finally:
             selected_frame.select()
 
-        _write_line("RCT benchmark configuration")
-        _write_line(f"  length:       {length}")
+        _write_line("RCT benchmark run configuration")
         _write_line(f"  warmup:       {warmup}")
         _write_line(f"  iterations:   {iterations}")
-        _write_line(f"  seed:         0x{seed:016x}")
 
 
 RctHelp()

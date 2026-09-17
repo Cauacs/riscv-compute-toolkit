@@ -9,7 +9,7 @@ from rct.codegen import CodegenReport
 from rct.vectorization import VectorizationReport
 
 
-SCHEMA_VERSION = "1.3"
+SCHEMA_VERSION = "2.0"
 
 
 @dataclass(frozen=True)
@@ -26,16 +26,19 @@ class Timing:
     min_ns: int
     median_ns: float
     mean_ns: float
+    samples_ns: tuple[int, ...]
 
 
 @dataclass(frozen=True)
 class ImplementationResult:
+    source_path: str
     validation_passed: bool
     timing: Timing
     sample_count: int
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "source": self.source_path,
             "validation": {"passed": self.validation_passed},
             "timing": asdict(self.timing),
             "sample_count": self.sample_count,

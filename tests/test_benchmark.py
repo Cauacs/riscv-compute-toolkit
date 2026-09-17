@@ -20,12 +20,20 @@ from rct.vectorization import VectorizationDiagnostic, VectorizationReport
 
 BENCHMARK_PROTOCOL = "\n".join(
     (
-        "rct-benchmark-result-v1",
+        "rct-benchmark-result-v2",
         "benchmark\tvector_add_f32\t16\t2\t4\t0x0000000000000001",
-        "implementation\treference\ttrue\t10\t12.5\t13\t4",
-        "implementation\tauto\ttrue\t8\t9\t9.5\t4",
+        "implementation\treference\tsrc/kernels/vector_add_reference.c\ttrue\t10\t12.5\t13\t4",
+        "implementation\tauto\tsrc/kernels/vector_add_auto.c\ttrue\t8\t9\t9.5\t4",
+        "sample\treference\t0\t10",
+        "sample\treference\t1\t12",
+        "sample\treference\t2\t13",
+        "sample\treference\t3\t17",
+        "sample\tauto\t0\t8",
+        "sample\tauto\t1\t9",
+        "sample\tauto\t2\t9",
+        "sample\tauto\t3\t12",
         "",
-    )
+)
 )
 
 
@@ -66,7 +74,7 @@ class ExperimentTests(unittest.TestCase):
     def test_experiment_json_is_versioned_and_preserves_results(self) -> None:
         document = json.loads(make_experiment().to_json())
 
-        self.assertEqual(document["schema_version"], "1.3")
+        self.assertEqual(document["schema_version"], "2.0")
         self.assertEqual(
             document["benchmark"],
             {
@@ -78,11 +86,30 @@ class ExperimentTests(unittest.TestCase):
             },
         )
         self.assertEqual(
-            document["implementations"]["auto"],
+            document["implementations"],
             {
-                "validation": {"passed": True},
-                "timing": {"min_ns": 8, "median_ns": 9.0, "mean_ns": 9.5},
-                "sample_count": 4,
+                "reference": {
+                    "source": "src/kernels/vector_add_reference.c",
+                    "validation": {"passed": True},
+                    "timing": {
+                        "min_ns": 10,
+                        "median_ns": 12.5,
+                        "mean_ns": 13.0,
+                        "samples_ns": [10, 12, 13, 17],
+                    },
+                    "sample_count": 4,
+                },
+                "auto": {
+                    "source": "src/kernels/vector_add_auto.c",
+                    "validation": {"passed": True},
+                    "timing": {
+                        "min_ns": 8,
+                        "median_ns": 9.0,
+                        "mean_ns": 9.5,
+                        "samples_ns": [8, 9, 9, 12],
+                    },
+                    "sample_count": 4,
+                },
             },
         )
         self.assertEqual(
@@ -170,7 +197,7 @@ class ExperimentTests(unittest.TestCase):
 
     def test_explicit_binary_omits_unverified_preset(self) -> None:
         with TemporaryDirectory() as directory:
-            binary = Path(directory) / "rct_vector_add_bench"
+            binary = Path(directory) / "rct_bench"
             binary.touch()
             result = mock.Mock(
                 returncode=0,
@@ -191,6 +218,7 @@ class ExperimentTests(unittest.TestCase):
             ):
                 experiment = run_benchmark(
                     binary=binary,
+                    benchmark="vector_add_f32",
                     preset="optimized-debug",
                     length=None,
                     warmup=None,
@@ -212,6 +240,8 @@ class BenchmarkProtocolIntegrationTests(unittest.TestCase):
             [
                 str(binary),
                 "--result-protocol",
+                "--benchmark",
+                "vector_add_f32",
                 "--length",
                 "8",
                 "--warmup",
@@ -250,7 +280,7 @@ class BenchmarkCliTests(unittest.TestCase):
                 result = cli.main(["benchmark", "--json"])
 
         self.assertEqual(result, 0)
-        self.assertEqual(json.loads(stdout.getvalue())["schema_version"], "1.3")
+        self.assertEqual(json.loads(stdout.getvalue())["schema_version"], "2.0")
 
     def test_human_output_remains_available(self) -> None:
         stdout = StringIO()

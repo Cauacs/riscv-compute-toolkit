@@ -52,7 +52,7 @@ variables, reordered lines, and inlining remain expected observations.
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ctest --test-dir build --output-on-failure
-./build/rct_vector_add_bench --length 8 --warmup 1 --iterations 2
+./build/rct_bench --benchmark vector_add_f32 --length 8 --warmup 1 --iterations 2
 ```
 
 Release keeps `RCT_SOURCE_DEBUG=OFF` by default, so its experiment semantics
@@ -64,7 +64,7 @@ Use a deliberately small workload:
 
 ```text
 gdb --tui -x tools/gdb/rct.py --args \
-  build/source-debug/rct_vector_add_bench \
+  build/source-debug/rct_bench --benchmark vector_add_f32 \
   --length 8 --warmup 1 --iterations 2
 ```
 
@@ -83,21 +83,20 @@ GDB session, load it with `source tools/gdb/rct.py`.
 (gdb) continue
 ```
 
-The second stop is `rct_run_vector_add_f32_benchmark`. Its `config` argument
-is the actual `rct_vector_add_f32_benchmark_config` pointer used by the
-benchmark:
+The second stop is `rct_run_benchmark`. Its `run_config` argument is the
+generic `rct_benchmark_run_config` pointer shared by every workload:
 
 ```text
-(gdb) print config->length
-(gdb) print config->warmup_iterations
-(gdb) print config->measured_iterations
-(gdb) print config->seed
+(gdb) print run_config->warmup_iterations
+(gdb) print run_config->measured_iterations
 (gdb) rct-show-config
 ```
 
 `rct-show-config` is intentionally available only while the stack contains
-`rct_run_vector_add_f32_benchmark`; it reads the real C value through GDB's
-embedded Python API rather than parsing textual `print` output.
+`rct_run_benchmark`; it reads the real generic C value through GDB's embedded
+Python API rather than parsing textual `print` output. Workload-specific
+settings, such as vector length and seed, are not part of this generic run
+configuration.
 
 ### Inputs and kernels
 
@@ -163,8 +162,9 @@ Build optimized debug, then launch the same small workload:
 
 ```text
 gdb --tui --args \
-  build/optimized-debug/rct_vector_add_bench \
+  build/optimized-debug/rct_bench --benchmark vector_add_f32 \
   --length 8 --warmup 1 --iterations 2
+
 ```
 
 Inspect source and generated instructions together:
@@ -192,7 +192,7 @@ rct disasm auto
 `rct disasm` defaults to the `optimized-debug` build and interleaves source
 with assembly; add `--no-source` for assembly only. It prefers `llvm-objdump`
 and falls back to GNU `objdump`. Raw full-binary disassembly remains available
-with `objdump -dS build/optimized-debug/rct_vector_add_bench`.
+with `objdump -dS build/optimized-debug/rct_bench`.
 
 ## RCT GDB commands
 
@@ -206,10 +206,10 @@ external dependencies.
 ```
 
 - `rct-help` lists the available RCT commands.
-- `rct-break-pipeline` creates and reports breakpoints for the current
-  vector-add entry point, orchestration, deterministic input generation,
-  scalar kernel, and validation. Missing symbols are reported explicitly.
-- `rct-show-config` prints the active benchmark configuration when stopped in
+- `rct-break-pipeline` creates and reports breakpoints for the benchmark entry
+  point, generic orchestration, deterministic input generation, scalar kernel,
+  and validation. Missing symbols are reported explicitly.
+- `rct-show-config` prints the active generic run configuration when stopped in
   the benchmark orchestration call stack.
 
 Vanilla GDB remains fully usable without this script.

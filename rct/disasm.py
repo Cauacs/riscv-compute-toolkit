@@ -4,7 +4,7 @@ import subprocess
 
 
 DEFAULT_PRESET = "optimized-debug"
-BENCHMARK_BINARY_NAME = "rct_vector_add_bench"
+BENCHMARK_BINARY_NAME = "rct_bench"
 KERNEL_SYMBOLS = {
     "reference": "rct_vector_add_f32_reference",
     "scalar": "rct_vector_add_f32_scalar",

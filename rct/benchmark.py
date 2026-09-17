@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import math
 from pathlib import Path
 import platform
@@ -24,12 +25,7 @@ from rct.experiment import (
 from rct.vectorization import load_vectorization_reports
 
 
-RESULT_PROTOCOL_HEADER = "rct-benchmark-result-v1"
-KERNEL_SOURCES = {
-    "reference": "src/kernels/vector_add_reference.c",
-    "scalar": "src/kernels/vector_add_scalar.c",
-    "auto": "src/kernels/vector_add_auto.c",
-}
+RESULT_PROTOCOL_HEADER = "rct-benchmark-result-v2"
 
 
 class BenchmarkError(RuntimeError):
@@ -80,6 +76,8 @@ def experiment_from_benchmark_protocol(
         )
 
     benchmark_fields = _parse_record(lines[1], "benchmark", 6, 2)
+    if not benchmark_fields[1]:
+        raise BenchmarkError("Benchmark protocol field 'benchmark.name' must not be empty.")
     seed = benchmark_fields[5]
     if (
         len(seed) != 18
@@ -99,34 +97,90 @@ def experiment_from_benchmark_protocol(
         seed=seed,
     )
 
-    implementations: dict[str, ImplementationResult] = {}
+    records: dict[str, tuple[str, bool, int, float, float, int]] = {}
+    samples: dict[str, list[int]] = {}
+    parsing_samples = False
     for line_number, line in enumerate(lines[2:], start=3):
-        fields = _parse_record(line, "implementation", 7, line_number)
-        name = fields[1]
-        if not name or name in implementations:
-            raise BenchmarkError(
-                f"Benchmark protocol implementation name on line {line_number} is invalid."
+        record_type = line.split("\t", 1)[0]
+        if record_type == "implementation":
+            if parsing_samples:
+                raise BenchmarkError(
+                    f"Benchmark protocol implementation record on line {line_number} "
+                    "must precede all sample records."
+                )
+            fields = _parse_record(line, "implementation", 8, line_number)
+            name = fields[1]
+            source_path = fields[2]
+            if not name or name in records:
+                raise BenchmarkError(
+                    f"Benchmark protocol implementation name on line {line_number} is invalid."
+                )
+            if not source_path:
+                raise BenchmarkError(
+                    f"Benchmark protocol field 'implementation.{name}.source_path' "
+                    "must not be empty."
+                )
+            if fields[3] == "true":
+                passed = True
+            elif fields[3] == "false":
+                passed = False
+            else:
+                raise BenchmarkError(
+                    f"Benchmark protocol field 'implementation.{name}.validation' "
+                    "must be true or false."
+                )
+            records[name] = (
+                source_path,
+                passed,
+                _parse_nonnegative_int(fields[4], f"implementation.{name}.min_ns"),
+                _parse_finite_float(fields[5], f"implementation.{name}.median_ns"),
+                _parse_finite_float(fields[6], f"implementation.{name}.mean_ns"),
+                _parse_nonnegative_int(fields[7], f"implementation.{name}.sample_count"),
             )
-        if fields[2] == "true":
-            passed = True
-        elif fields[2] == "false":
-            passed = False
-        else:
+            samples[name] = []
+            continue
+
+        parsing_samples = True
+        fields = _parse_record(line, "sample", 4, line_number)
+        name = fields[1]
+        if name not in records:
             raise BenchmarkError(
-                f"Benchmark protocol field 'implementation.{name}.validation' must be true or false."
+                f"Benchmark protocol sample on line {line_number} has an unknown implementation."
+            )
+        sample_count = records[name][5]
+        if len(samples[name]) >= sample_count:
+            raise BenchmarkError(
+                f"Benchmark protocol implementation '{name}' has excess sample records."
+            )
+        index = _parse_nonnegative_int(fields[2], f"sample.{name}.index")
+        if index != len(samples[name]):
+            raise BenchmarkError(
+                f"Benchmark protocol sample index for implementation '{name}' on line "
+                f"{line_number} is out of order."
+            )
+        samples[name].append(
+            _parse_nonnegative_int(fields[3], f"sample.{name}.elapsed_ns")
+        )
+
+    if not records:
+        raise BenchmarkError("Benchmark protocol must contain at least one implementation.")
+
+    implementations: dict[str, ImplementationResult] = {}
+    for name, (source_path, passed, minimum, median, mean, sample_count) in records.items():
+        if len(samples[name]) != sample_count:
+            raise BenchmarkError(
+                f"Benchmark protocol implementation '{name}' is missing sample records."
             )
         implementations[name] = ImplementationResult(
+            source_path=source_path,
             validation_passed=passed,
             timing=Timing(
-                min_ns=_parse_nonnegative_int(fields[3], f"implementation.{name}.min_ns"),
-                median_ns=_parse_finite_float(
-                    fields[4], f"implementation.{name}.median_ns"
-                ),
-                mean_ns=_parse_finite_float(fields[5], f"implementation.{name}.mean_ns"),
+                min_ns=minimum,
+                median_ns=median,
+                mean_ns=mean,
+                samples_ns=tuple(samples[name]),
             ),
-            sample_count=_parse_nonnegative_int(
-                fields[6], f"implementation.{name}.sample_count"
-            ),
+            sample_count=sample_count,
         )
 
     return Experiment(
@@ -144,6 +198,7 @@ def run_benchmark(
     *,
     binary: Path | None,
     preset: str,
+    benchmark: str,
     length: str | None,
     warmup: str | None,
     iterations: str | None,
@@ -153,7 +208,7 @@ def run_benchmark(
     if not binary_path.is_file():
         raise BenchmarkError(f"Benchmark binary does not exist: {binary_path}")
 
-    command = [str(binary_path), "--result-protocol"]
+    command = [str(binary_path), "--benchmark", benchmark, "--result-protocol"]
     for option, value in (
         ("--length", length),
         ("--warmup", warmup),
@@ -176,11 +231,27 @@ def run_benchmark(
 
     project_root = Path(__file__).resolve().parent.parent
     build_directory = binary_path.parent if binary is not None else project_root / "build" / preset
+    architecture = platform.machine() or None
+    experiment = experiment_from_benchmark_protocol(
+        result.stdout,
+        architecture=architecture,
+        isa=discover_isa_capabilities(architecture),
+        compiler=None,
+        build=BuildMetadata(
+            preset=None if binary is not None else preset,
+            kernel_compile_flags=None,
+        ),
+    )
     try:
         build = BuildMetadata(
             preset=None if binary is not None else preset,
             kernel_compile_flags=load_kernel_compile_flags(
-                build_directory, project_root, KERNEL_SOURCES
+                build_directory,
+                project_root,
+                {
+                    name: implementation.source_path
+                    for name, implementation in experiment.implementations.items()
+                },
             ),
             vectorization=load_vectorization_reports(build_directory, project_root),
         )
@@ -188,11 +259,8 @@ def run_benchmark(
     except BuildMetadataError as error:
         raise BenchmarkError(str(error)) from error
 
-    architecture = platform.machine() or None
-    return experiment_from_benchmark_protocol(
-        result.stdout,
-        architecture=architecture,
-        isa=discover_isa_capabilities(architecture),
+    return replace(
+        experiment,
         compiler=compiler,
         build=build,
         codegen=load_codegen_reports(binary_path, preset),

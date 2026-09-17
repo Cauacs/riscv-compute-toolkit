@@ -39,7 +39,7 @@ def create_parser() -> argparse.ArgumentParser:
         help="Show assembly without interleaved source.",
     )
     benchmark_parser = subparsers.add_parser(
-        "benchmark", help="Run vector_add_f32 and collect an experiment record."
+        "benchmark", help="Run a benchmark and collect an experiment record."
     )
     benchmark_parser.add_argument(
         "--binary",
@@ -50,6 +50,11 @@ def create_parser() -> argparse.ArgumentParser:
         "--preset",
         default=DEFAULT_PRESET,
         help=f"CMake build preset used to locate the binary (default: {DEFAULT_PRESET}).",
+    )
+    benchmark_parser.add_argument(
+        "--benchmark",
+        default="vector_add_f32",
+        help="Benchmark workload to run (default: vector_add_f32).",
     )
     benchmark_parser.add_argument("--length", help="Vector length passed to the benchmark.")
     benchmark_parser.add_argument("--warmup", help="Warmup iterations passed to the benchmark.")
@@ -98,6 +103,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             experiment = run_benchmark(
                 binary=args.binary,
                 preset=args.preset,
+                benchmark=args.benchmark,
                 length=args.length,
                 warmup=args.warmup,
                 iterations=args.iterations,

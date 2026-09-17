@@ -17,7 +17,7 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ctest --test-dir build --output-on-failure
 python -m unittest discover
-./build/rct_vector_add_bench
+./build/rct_bench --benchmark vector_add_f32
 python -m rct --help
 ```
 
